@@ -1,0 +1,281 @@
+// JPQC — Esquema de datos del Sistema de Control de Calidad Analítico
+// Referencia de diseño: docs/SDD.md (§5 Modelo de datos)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+/// Fuente del Error Total permitido (ETa) por analito.
+enum EtaSource {
+  CLIA
+  RICOS_OPT
+  RICOS_DES
+  RICOS_MIN
+  MANUAL
+}
+
+/// Estado de la media/DS por lote-nivel × analito.
+/// PROVISIONAL: se usan valores del inserto.
+/// PROPUESTA: n>=20, el sistema propuso media/DS del laboratorio (pendiente de aprobación).
+/// ESTABLECIDA: aprobada por la supervisora; se usan los valores del laboratorio.
+enum TargetStatus {
+  PROVISIONAL
+  PROPUESTA
+  ESTABLECIDA
+}
+
+/// Resultado de la evaluación de reglas de una corrida.
+enum ResultStatus {
+  ACEPTADA
+  ADVERTENCIA
+  RECHAZADA
+}
+
+// ─────────────────────────────────────────────────────────────
+// Configuración / catálogos
+// ─────────────────────────────────────────────────────────────
+
+model LabProfile {
+  id          String   @id @default(cuid())
+  nombre      String
+  nit         String?
+  direccion   String?
+  responsable String?
+  logoUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Catálogo editable de áreas del laboratorio.
+model Area {
+  id            String    @id @default(cuid())
+  nombre        String    @unique
+  defaultLevels Int       @default(2) // niveles de control esperados (guía)
+  orden         Int       @default(0)
+  activo        Boolean   @default(true)
+  analytes      Analyte[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+/// Catálogo editable de eventos que disparan una corrida de control.
+model TriggerEvent {
+  id        String   @id @default(cuid())
+  nombre    String   @unique
+  orden     Int      @default(0)
+  activo    Boolean  @default(true)
+  runs      QcRun[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Catálogo editable de proveedores de Control de Calidad Externo (CCE).
+model ExternalQcProvider {
+  id           String            @id @default(cuid())
+  nombre       String            @unique
+  acreditacion String? // p. ej. ISO/IEC 17043
+  activo       Boolean           @default(true)
+  results      ExternalQc[]
+  analyteLinks ProviderAnalyte[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Analitos y metas por lote
+// ─────────────────────────────────────────────────────────────
+
+model Analyte {
+  id            String              @id @default(cuid())
+  nombre        String
+  areaId        String
+  area          Area                @relation(fields: [areaId], references: [id])
+  unidad        String?
+  decimales     Int                 @default(2)
+  metodo        String?
+  equipo        String?
+  etaValue      Float? // Error Total permitido (%)
+  etaSource     EtaSource           @default(MANUAL)
+  cvi           Float? // variabilidad biológica intraindividual (%)
+  cvg           Float? // variabilidad biológica interindividual (%)
+  validated     Boolean             @default(false) // ETa/CVi/CVg validados por la PO
+  activo        Boolean             @default(true)
+  // Preparación multiusuario / cloud (hoy sin uso)
+  tenantId      String              @default("default")
+  createdBy     String?
+  targets       LotAnalyteTarget[]
+  results       QcResult[]
+  externalQc    ExternalQc[]
+  providerLinks ProviderAnalyte[]
+  indicators    IndicatorSnapshot[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([areaId])
+  @@index([tenantId])
+}
+
+/// Lote de material de control de tercera opinión, por nivel.
+model ControlLot {
+  id              String             @id @default(cuid())
+  fabricante      String
+  nombreComercial String?
+  levelLabel      String // "Nivel 1", "Bajo", "Normal", "Alto"...
+  levelIndex      Int
+  numeroLote      String
+  vencimiento     DateTime?
+  apertura        DateTime?
+  activo          Boolean            @default(true)
+  tenantId        String             @default("default")
+  createdBy       String?
+  targets         LotAnalyteTarget[]
+  results         QcResult[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([activo])
+  @@index([tenantId])
+}
+
+/// Metas del control por (lote-nivel × analito): valores del inserto y establecidos.
+model LotAnalyteTarget {
+  id              String       @id @default(cuid())
+  lotId           String
+  lot             ControlLot   @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  analyteId       String
+  analyte         Analyte      @relation(fields: [analyteId], references: [id], onDelete: Cascade)
+  // Valores del folleto/inserto
+  insertMean      Float
+  insertSd        Float
+  insertCv        Float?
+  // Valores establecidos por el laboratorio (tras >=20 corridas y aprobación)
+  establishedMean Float?
+  establishedSd   Float?
+  nEstablished    Int          @default(0)
+  status          TargetStatus @default(PROVISIONAL)
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([lotId, analyteId])
+  @@index([analyteId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Corridas y resultados de CCI
+// ─────────────────────────────────────────────────────────────
+
+model QcRun {
+  id             String        @id @default(cuid())
+  fecha          DateTime // fecha y hora de la corrida
+  triggerEventId String?
+  triggerEvent   TriggerEvent? @relation(fields: [triggerEventId], references: [id])
+  operador       String?
+  notas          String?
+  tenantId       String        @default("default")
+  createdBy      String?
+  results        QcResult[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([fecha])
+  @@index([tenantId])
+}
+
+model QcResult {
+  id               String       @id @default(cuid())
+  runId            String
+  run              QcRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  analyteId        String
+  analyte          Analyte      @relation(fields: [analyteId], references: [id])
+  lotId            String
+  lot              ControlLot   @relation(fields: [lotId], references: [id])
+  value            Float
+  zScore           Float?
+  rulesViolated    Json? // ["1_3s", "2_2s", ...]
+  status           ResultStatus @default(ACEPTADA)
+  correctiveAction String?
+  comment          String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([analyteId, lotId])
+  @@index([runId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// CCE (control externo)
+// ─────────────────────────────────────────────────────────────
+
+/// Vínculo proveedor CCE ↔ analitos que controla.
+model ProviderAnalyte {
+  id         String             @id @default(cuid())
+  providerId String
+  provider   ExternalQcProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  analyteId  String
+  analyte    Analyte            @relation(fields: [analyteId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, analyteId])
+}
+
+model ExternalQc {
+  id          String             @id @default(cuid())
+  analyteId   String
+  analyte     Analyte            @relation(fields: [analyteId], references: [id])
+  providerId  String
+  provider    ExternalQcProvider @relation(fields: [providerId], references: [id])
+  ciclo       String // periodo/ciclo del programa
+  nivel       String?
+  labResult   Float
+  targetValue Float? // valor consenso/par
+  sdGroup     Float?
+  sdi         Float? // índice de desviación estándar / z
+  biasPct     Float?
+  evaluacion  String?
+  notas       String?
+  fecha       DateTime?
+  tenantId    String             @default("default")
+  createdBy   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([analyteId])
+  @@index([providerId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Cierre mensual / indicadores
+// ─────────────────────────────────────────────────────────────
+
+model IndicatorSnapshot {
+  id               String    @id @default(cuid())
+  analyteId        String
+  analyte          Analyte   @relation(fields: [analyteId], references: [id])
+  periodo          String // "2026-07"
+  cvPct            Float?
+  biasPct          Float?
+  tePct            Float?
+  sigma            Float?
+  uncertaintyU     Float?
+  rulesRecommended Json?
+  analysisText     String?
+  signedBy         String?
+  signedAt         DateTime?
+  tenantId         String    @default("default")
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([analyteId, periodo])
+  @@index([analyteId])
+}
