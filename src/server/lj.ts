@@ -22,6 +22,8 @@ export async function getLJContext(analyteId: string): Promise<LJContext | null>
     const mean = established ? t.establishedMean! : t.insertMean;
     const sd = established ? t.establishedSd! : t.insertSd;
 
+    // La gráfica sí trae las corridas RECHAZADAS (evidencia de auditoría);
+    // se dibujan aparte y no entran en la línea ni en ningún cálculo.
     const results = await prisma.qcResult.findMany({
       where: { analyteId, lotId: t.lotId },
       include: { run: true },
@@ -29,6 +31,7 @@ export async function getLJContext(analyteId: string): Promise<LJContext | null>
     });
 
     const points: LJPoint[] = results.map((r, i) => ({
+      resultId: r.id,
       seq: i + 1,
       date: r.run.fecha.toISOString(),
       value: r.value,
@@ -37,12 +40,20 @@ export async function getLJContext(analyteId: string): Promise<LJContext | null>
     }));
 
     levels.push({
+      targetId: t.id,
       lotId: t.lotId,
       lotLabel: `${t.lot.fabricante}${t.lot.nombreComercial ? " " + t.lot.nombreComercial : ""} · ${t.lot.levelLabel}`,
       levelIndex: t.lot.levelIndex,
       mean,
       sd,
       source: t.status as LJLevel["source"],
+      insertMean: t.insertMean,
+      insertSd: t.insertSd,
+      establishedMean: t.establishedMean,
+      establishedSd: t.establishedSd,
+      nEstablished: t.nEstablished,
+      approvedBy: t.approvedBy,
+      approvedAt: t.approvedAt ? t.approvedAt.toISOString() : null,
       points,
     });
   }
@@ -54,4 +65,31 @@ export async function getLJContext(analyteId: string): Promise<LJContext | null>
     decimales: analyte.decimales,
     levels,
   };
+}
+
+/**
+ * Valores de las corridas seleccionadas para establecer la media/DS.
+ *
+ * Se releen de la base de datos (no se confía en lo que envía el cliente) y se
+ * descartan las RECHAZADAS: tuvieron error analítico y no pueden entrar al
+ * cálculo. Solo se aceptan resultados del propio lote-analito del target.
+ */
+export async function getSelectedRunValues(
+  targetId: string,
+  resultIds: string[]
+): Promise<{ analyteId: string; values: number[] } | null> {
+  const target = await prisma.lotAnalyteTarget.findUnique({ where: { id: targetId } });
+  if (!target) return null;
+
+  const results = await prisma.qcResult.findMany({
+    where: {
+      id: { in: resultIds },
+      analyteId: target.analyteId,
+      lotId: target.lotId,
+      status: { not: "RECHAZADA" },
+    },
+    select: { value: true },
+  });
+
+  return { analyteId: target.analyteId, values: results.map((r) => r.value) };
 }

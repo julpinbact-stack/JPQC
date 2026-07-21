@@ -39,8 +39,7 @@ export type RunLevelInput = {
 
 export type SaveRunInput = {
   analyteId: string;
-  fecha: string; // "YYYY-MM-DD"
-  hora?: string | null; // "HH:mm"
+  fecha: string; // "YYYY-MM-DD" (solo día, sin hora)
   triggerEventId?: string | null;
   operador?: string | null;
   notas?: string | null;

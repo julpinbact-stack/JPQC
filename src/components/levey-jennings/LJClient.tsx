@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Field, Select } from "@/components/ui/Field";
 import { LJChart } from "@/components/levey-jennings/LJChart";
+import { TargetPanel } from "@/components/levey-jennings/TargetPanel";
 import { loadLJ } from "@/app/levey-jennings/actions";
 import type { LJContext } from "@/lib/lj";
 import type { EntryAnalyte } from "@/lib/qc-entry";
+
+/** Redondea para mostrar: la media/DS calculadas traen toda la precisión del cálculo. */
+const fmt = (v: number, decimales: number) => v.toFixed(decimales);
 
 export function LJClient({ analytes }: { analytes: EntryAnalyte[] }) {
   const [analyteId, setAnalyteId] = useState("");
@@ -23,6 +27,14 @@ export function LJClient({ analytes }: { analytes: EntryAnalyte[] }) {
       if (res.ok) setCtx(res.data!);
     });
   };
+
+  /** Tras establecer o revertir la media/DS: recargar para redibujar las líneas. */
+  const reload = useCallback(() => {
+    if (!analyteId) return;
+    loadLJ(analyteId).then((res) => {
+      if (res.ok) setCtx(res.data!);
+    });
+  }, [analyteId]);
 
   return (
     <div className="space-y-5">
@@ -52,7 +64,12 @@ export function LJClient({ analytes }: { analytes: EntryAnalyte[] }) {
           <Card key={lv.lotId}>
             <CardHeader
               title={lv.lotLabel}
-              subtitle={`Media ${lv.mean} · DS ${lv.sd} · ${lv.points.length} corridas`}
+              subtitle={`Media ${fmt(lv.mean, ctx.decimales)} · DS ${fmt(
+                lv.sd,
+                Math.max(ctx.decimales, 2)
+              )} · ${lv.points.length} corridas (${
+                lv.points.filter((p) => p.status === "RECHAZADA").length
+              } rechazadas)`}
               action={
                 <span
                   className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -67,6 +84,12 @@ export function LJClient({ analytes }: { analytes: EntryAnalyte[] }) {
             />
             <CardBody>
               <LJChart level={lv} decimales={ctx.decimales} />
+              <TargetPanel
+                level={lv}
+                decimales={ctx.decimales}
+                unidad={ctx.unidad}
+                onChanged={reload}
+              />
             </CardBody>
           </Card>
         ))}

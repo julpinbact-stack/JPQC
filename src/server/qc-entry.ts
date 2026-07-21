@@ -63,9 +63,14 @@ export async function getAnalyteEntryContext(
     const effSd = established ? t.establishedSd! : t.insertSd;
     if (t.insertCv != null) insertCvs.push(t.insertCv);
 
-    // Historial de resultados de este nivel (cronológico)
+    // Historial de resultados de este nivel (cronológico).
+    // Se excluyen las corridas RECHAZADAS: se les aplicó acción correctiva y se
+    // repitió la corrida, por lo que no reflejan el desempeño del método. Así no
+    // contaminan la media/DS/CV ni se propagan al historial de z-scores que
+    // alimenta las reglas de racha de Westgard (10x, 4_1s, etc.).
+    // Las ADVERTENCIA sí cuentan: fueron aceptadas y se liberaron pacientes.
     const results = await prisma.qcResult.findMany({
-      where: { analyteId, lotId: t.lotId },
+      where: { analyteId, lotId: t.lotId, status: { not: "RECHAZADA" } },
       include: { run: true },
       orderBy: { run: { fecha: "asc" } },
     });

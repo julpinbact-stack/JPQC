@@ -48,11 +48,16 @@ export async function getIndicators(): Promise<IndicatorRow[]> {
     let totalN = 0;
 
     for (const t of a.targets) {
+      // Se excluyen las corridas RECHAZADAS: se repitieron tras la acción
+      // correctiva y no representan el desempeño del método, así que no deben
+      // entrar al CV por nivel ni al sesgo contra el inserto. Las ADVERTENCIA
+      // sí cuentan (fueron aceptadas y se liberaron pacientes).
       const results = await prisma.qcResult.findMany({
-        where: { analyteId: a.id, lotId: t.lotId },
+        where: { analyteId: a.id, lotId: t.lotId, status: { not: "RECHAZADA" } },
         select: { value: true },
       });
       const values = results.map((r) => r.value);
+      // n refleja solo los datos que realmente entraron al cálculo.
       totalN += values.length;
       if (values.length >= MIN_N) {
         const m = mean(values);

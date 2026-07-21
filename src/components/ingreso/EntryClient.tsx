@@ -28,8 +28,8 @@ export function EntryClient({
   const [analyteId, setAnalyteId] = useState("");
   const [ctx, setCtx] = useState<EntryContext | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
-  const [fecha, setFecha] = useState(todayISO());
-  const [hora, setHora] = useState("");
+  const hoy = todayISO();
+  const [fecha, setFecha] = useState(hoy);
   const [triggerId, setTriggerId] = useState("");
   const [operador, setOperador] = useState("");
   const [notas, setNotas] = useState("");
@@ -86,7 +86,6 @@ export function EntryClient({
       const res = await saveRun({
         analyteId: ctx.analyteId,
         fecha,
-        hora: hora || null,
         triggerEventId: triggerId || null,
         operador: operador || null,
         notas: notas || null,
@@ -178,11 +177,13 @@ export function EntryClient({
               })}
 
               <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
-                <Field label="Fecha">
-                  <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-                </Field>
-                <Field label="Hora">
-                  <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
+                <Field label="Fecha" hint="No se admiten fechas futuras.">
+                  <Input
+                    type="date"
+                    value={fecha}
+                    max={hoy}
+                    onChange={(e) => setFecha(e.target.value)}
+                  />
                 </Field>
                 <Field label="Evento disparador">
                   <Select value={triggerId} onChange={(e) => setTriggerId(e.target.value)}>
