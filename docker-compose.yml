@@ -12,7 +12,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      # Puerto del host 5433 para no chocar con un PostgreSQL nativo en 5432.
+      # Dentro de la red de compose la app usa db:5432 (no se ve afectado).
+      - "5433:5432"
     volumes:
       - jpqc_pgdata:/var/lib/postgresql/data
     healthcheck:
