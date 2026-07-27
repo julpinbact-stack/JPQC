@@ -44,4 +44,4 @@ services:
       - "3001:3000"
 
 volumes:
-  jpqc_pgdata:
+  jpqc_pgdata_prod:
