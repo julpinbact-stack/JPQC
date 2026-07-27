@@ -39,7 +39,7 @@ services:
       # Modo DEMOSTRACIÓN: puebla datos FICTICIOS al arrancar (seed-demo) y muestra
       # la franja de aviso en la UI. En un despliegue REAL del laboratorio, quitar
       # esta línea (o ponerla en "false") para no inyectar datos de prueba.
-      DEMO_MODE: "true"
+      DEMO_MODE: "false"
     ports:
       - "3001:3000"
 
