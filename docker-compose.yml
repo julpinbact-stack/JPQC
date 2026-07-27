@@ -41,7 +41,7 @@ services:
       # esta línea (o ponerla en "false") para no inyectar datos de prueba.
       DEMO_MODE: "true"
     ports:
-      - "3000:3000"
+      - "3001:3000"
 
 volumes:
   jpqc_pgdata:
