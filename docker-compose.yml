@@ -14,7 +14,7 @@ services:
     ports:
       # Puerto del host 5433 para no chocar con un PostgreSQL nativo en 5432.
       # Dentro de la red de compose la app usa db:5432 (no se ve afectado).
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - jpqc_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -39,9 +39,9 @@ services:
       # Modo DEMOSTRACIÓN: puebla datos FICTICIOS al arrancar (seed-demo) y muestra
       # la franja de aviso en la UI. En un despliegue REAL del laboratorio, quitar
       # esta línea (o ponerla en "false") para no inyectar datos de prueba.
-      DEMO_MODE: "true"
+      DEMO_MODE: "false"
     ports:
-      - "3000:3000"
+      - "3001:3000"
 
 volumes:
   jpqc_pgdata:

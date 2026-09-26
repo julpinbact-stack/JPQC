@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { logout } from "@/app/login/actions";
 
-export function Topbar() {
+export function Topbar({ user }: { user?: string | null }) {
   const pathname = usePathname();
   const current =
     NAV_ITEMS.find((i) =>
@@ -19,6 +21,23 @@ export function Topbar() {
           <h1 className="text-base font-semibold text-foreground">{current.label}</h1>
           <p className="text-xs text-muted">{current.description}</p>
         </div>
+
+        {user && (
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-muted sm:inline" title={user}>
+              {user}
+            </span>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
+                Cerrar sesión
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Navegación horizontal en pantallas pequeñas */}
